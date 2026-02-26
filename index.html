@@ -207,6 +207,7 @@
                 ctx.beginPath(); ctx.moveTo(barX, barY);
                 ctx.lineTo(barX + (unit === 'imperial' ? 1 : 50 / IN_TO_MM) * scale, barY);
                 ctx.strokeStyle = '#64748b'; ctx.lineWidth = 3; ctx.stroke();
+
                 const link = document.createElement('a'); link.href = canvas.toDataURL('image/jpeg', 0.95); link.download = 'blade_template.jpg'; link.click();
             };
 
@@ -262,9 +263,12 @@
                             <svg className="w-full h-full drop-shadow-2xl" viewBox="-100 -200 800 400">
                                 <g transform="translate(50, 0)">
                                     <line x1="-100" y1="0" x2="600" y2="0" stroke="#cbd5e1" strokeWidth="1" strokeDasharray="4 4" />
-                                    <rect x={params.exposedLength * 0.35 * IN_TO_PX} y="-120" width={params.exposedLength * 0.07 * IN_TO_PX} height="240" fill="#22c55e" fillOpacity="0.1" />
                                     
-                                    {/* Restoration of the Sweet Spot text label */}
+                                    {/* The blade path is now drawn first so elements below overlay it */}
+                                    <path d={generateBladePath(params)} fill="#fde68a" stroke="#92400e" strokeWidth="2" className="transition-all duration-300" />
+                                    
+                                    {/* Sweet Spot Box and Label overlay the blade */}
+                                    <rect x={params.exposedLength * 0.35 * IN_TO_PX} y="-120" width={params.exposedLength * 0.07 * IN_TO_PX} height="240" fill="#22c55e" fillOpacity="0.15" />
                                     <text 
                                         x={(params.exposedLength * 0.385) * IN_TO_PX} 
                                         y="-130" 
@@ -274,7 +278,6 @@
                                         Sweet Spot
                                     </text>
 
-                                    <path d={generateBladePath(params)} fill="#fde68a" stroke="#92400e" strokeWidth="2" className="transition-all duration-300" />
                                     {params.hasPinHole && <circle cx={-params.pinHoleOffset * IN_TO_PX} cy="0" r={(params.pinHoleSize / 2) * IN_TO_PX} fill="white" stroke="#ef4444" strokeWidth="1.5" />}
                                     <g transform={`translate(${derived.cgX * IN_TO_PX}, 0)`} className="transition-all duration-300">
                                         <line x1="-15" y1="0" x2="15" y2="0" stroke="#ef4444" strokeWidth="2" />
