@@ -15,8 +15,23 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-        body { font-family: 'Inter', sans-serif; }
+        body { 
+            font-family: 'Inter', sans-serif; 
+            overscroll-behavior-y: contain; /* Prevents pull-to-refresh interfering with UI */
+        }
         input[type="range"] { accent-color: #2563eb; }
+        
+        /* Smooth transitions for mobile sidebar */
+        .sidebar-transition {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* Prevent auto-zoom on mobile inputs */
+        @media screen and (max-width: 768px) {
+            input[type="text"] {
+                font-size: 16px !important;
+            }
+        }
     </style>
 </head>
 <body class="bg-slate-50">
@@ -87,8 +102,6 @@
             const handleSliderChange = (key, value) => {
                 const numeric = parseFloat(value);
                 setParams(prev => ({ ...prev, [key]: fromDisplayValue(numeric) }));
-                
-                // Sync specific keys that have manual text inputs
                 if (key === 'tipRadius' || key === 'tipWidth') {
                     setInputStates(prev => ({ 
                         ...prev, 
@@ -205,105 +218,121 @@
                 ctx.stroke(new Path2D(generateBladePath(params, true, scale, false)));
                 if (params.hasPinHole) { ctx.beginPath(); ctx.arc(-params.pinHoleOffset * scale, 0, (params.pinHoleSize / 2) * scale, 0, Math.PI * 2); ctx.strokeStyle = 'red'; ctx.stroke(); }
                 ctx.restore();
-                
                 const barY = canvas.height - (0.5 * scale); const barX = 1 * scale;
                 ctx.fillStyle = '#64748b'; ctx.font = `bold ${Math.round(0.12 * scale)}px sans-serif`;
                 ctx.fillText(unit === 'imperial' ? "1 INCH SCALE BAR" : "50MM SCALE BAR", barX, barY - 10);
                 ctx.beginPath(); ctx.moveTo(barX, barY);
                 ctx.lineTo(barX + (unit === 'imperial' ? 1 : 50 / IN_TO_MM) * scale, barY);
                 ctx.strokeStyle = '#64748b'; ctx.lineWidth = 3; ctx.stroke();
-
                 const link = document.createElement('a'); link.href = canvas.toDataURL('image/jpeg', 0.95); link.download = 'blade_template.jpg'; link.click();
             };
 
             return (
-                <div className="flex flex-col md:flex-row h-screen overflow-hidden text-slate-900 bg-slate-50">
-                    <div className={`w-full md:w-80 bg-white border-r flex flex-col shadow-sm transition-all ${isSidebarOpen ? '' : 'md:w-0'}`}>
-                        <div className="p-4 border-b flex justify-between items-center bg-white sticky top-0 z-10">
+                <div className="flex flex-col md:flex-row h-[100dvh] overflow-hidden text-slate-900 bg-slate-50">
+                    {/* Header for Mobile */}
+                    <div className="md:hidden p-4 border-b flex justify-between items-center bg-white z-30 shadow-sm">
+                        <div className="flex items-center gap-2"><Icon name="wind" className="text-blue-600" size={20}/> <h1 className="font-bold text-sm">Blade Designer</h1></div>
+                        <div className="flex gap-2">
+                             <button onClick={toggleUnits} className="text-[10px] font-bold uppercase bg-slate-100 px-3 py-2 rounded-lg">{unit}</button>
+                             <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="bg-blue-600 text-white px-3 py-2 rounded-lg text-[10px] font-bold flex items-center gap-1">
+                                <Icon name={isSidebarOpen ? "chevron-up" : "settings"} size={14} />
+                                {isSidebarOpen ? "CLOSE" : "CONTROLS"}
+                             </button>
+                        </div>
+                    </div>
+
+                    {/* Sidebar Controls */}
+                    <div className={`sidebar-transition fixed inset-x-0 top-[65px] bottom-0 md:relative md:top-0 w-full md:w-80 bg-white border-r flex flex-col shadow-sm z-20 overflow-hidden ${isSidebarOpen ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0 md:translate-y-0 md:w-0 md:opacity-0 pointer-events-none md:pointer-events-auto'}`}>
+                        <div className="hidden md:flex p-4 border-b justify-between items-center bg-white sticky top-0 z-10">
                             <div className="flex items-center gap-2"><Icon name="wind" className="text-blue-600" size={20}/> <h1 className="font-bold text-sm tracking-tight">Blade Designer</h1></div>
                             <button onClick={toggleUnits} className="text-[10px] font-bold uppercase bg-slate-100 px-2 py-1 rounded hover:bg-slate-200 transition-colors">{unit}</button>
                         </div>
-                        <div className="flex-1 overflow-y-auto p-4 space-y-6">
-                            <div className="grid grid-cols-2 gap-1 bg-slate-100 p-1 rounded-lg">
-                                <button onClick={() => handleStyleChange('rounded')} className={`py-1.5 text-xs font-bold rounded ${params.tipStyle==='rounded'?'bg-white shadow text-blue-600':'text-slate-500 hover:text-slate-700'}`}>Round</button>
-                                <button onClick={() => handleStyleChange('leaf')} className={`py-1.5 text-xs font-bold rounded ${params.tipStyle==='leaf'?'bg-white shadow text-blue-600':'text-slate-500 hover:text-slate-700'}`}>Leaf</button>
+                        <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">
+                            <div className="grid grid-cols-2 gap-1 bg-slate-100 p-1 rounded-xl">
+                                <button onClick={() => handleStyleChange('rounded')} className={`py-2 text-xs font-bold rounded-lg ${params.tipStyle==='rounded'?'bg-white shadow text-blue-600':'text-slate-500 hover:text-slate-700'}`}>Round</button>
+                                <button onClick={() => handleStyleChange('leaf')} className={`py-2 text-xs font-bold rounded-lg ${params.tipStyle==='leaf'?'bg-white shadow text-blue-600':'text-slate-500 hover:text-slate-700'}`}>Leaf</button>
                             </div>
                             <div className="space-y-4">
                                 <label className="text-[10px] font-bold uppercase text-slate-400 block tracking-widest">Geometry</label>
                                 <div>
                                     <label className="text-xs text-slate-500 mb-1 block font-medium">Exposed Length</label>
-                                    <input type="text" value={inputStates.exposedLength} onChange={e => handleTextChange('exposedLength', e.target.value)} className="w-full p-2 border rounded text-sm font-mono outline-none focus:ring-2 focus:ring-blue-500 transition-shadow"/>
+                                    <input type="text" inputMode="decimal" value={inputStates.exposedLength} onChange={e => handleTextChange('exposedLength', e.target.value)} className="w-full p-3 border rounded-xl text-base font-mono outline-none focus:ring-2 focus:ring-blue-500 transition-shadow bg-slate-50 md:bg-white md:text-sm md:p-2"/>
                                 </div>
                                 {params.tipStyle === 'leaf' ? (
-                                    <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl space-y-3 shadow-inner">
-                                        <div><label className="text-[10px] font-bold text-slate-600 uppercase">Swell Position</label><input type="range" min="0.1" max="0.9" step="0.05" value={params.widthPosition} onChange={e => setParams({...params, widthPosition: parseFloat(e.target.value)})} className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer"/></div>
-                                        <div><label className="text-[10px] font-bold text-slate-600 uppercase">Swell Width</label><input type="range" min={toDisplayValue(0.5)} max={toDisplayValue(5)} step={toDisplayValue(0.05)} value={toDisplayValue(params.tipWidth)} onChange={e => handleSliderChange('tipWidth', e.target.value)} className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer"/></div>
-                                        <div><label className="text-[10px] font-bold text-slate-600 uppercase">Sharpness</label><input type="range" min="0" max="1" step="0.05" value={params.taperSharpness} onChange={e => setParams({...params, taperSharpness: parseFloat(e.target.value)})} className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer"/></div>
-                                        <div><label className="text-[10px] font-bold text-slate-600 uppercase">Bluntness</label><input type="range" min="0" max="1" step="0.05" value={params.tipRadius} onChange={e => setParams({...params, tipRadius: parseFloat(e.target.value)})} className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer"/></div>
+                                    <div className="p-4 bg-slate-50 border border-slate-100 rounded-2xl space-y-5 shadow-inner">
+                                        <div><label className="text-[10px] font-bold text-slate-600 uppercase flex justify-between">Swell Position <span>{params.widthPosition.toFixed(2)}</span></label><input type="range" min="0.1" max="0.9" step="0.05" value={params.widthPosition} onChange={e => setParams({...params, widthPosition: parseFloat(e.target.value)})} className="w-full h-2 mt-2 bg-slate-200 rounded-lg appearance-none cursor-pointer"/></div>
+                                        <div><label className="text-[10px] font-bold text-slate-600 uppercase flex justify-between">Swell Width <span>{toDisplayValue(params.tipWidth).toFixed(1)}{unitLabel}</span></label><input type="range" min={toDisplayValue(0.5)} max={toDisplayValue(5)} step={toDisplayValue(0.05)} value={toDisplayValue(params.tipWidth)} onChange={e => handleSliderChange('tipWidth', e.target.value)} className="w-full h-2 mt-2 bg-slate-200 rounded-lg appearance-none cursor-pointer"/></div>
+                                        <div><label className="text-[10px] font-bold text-slate-600 uppercase">Sharpness</label><input type="range" min="0" max="1" step="0.05" value={params.taperSharpness} onChange={e => setParams({...params, taperSharpness: parseFloat(e.target.value)})} className="w-full h-2 mt-2 bg-slate-200 rounded-lg appearance-none cursor-pointer"/></div>
+                                        <div><label className="text-[10px] font-bold text-slate-600 uppercase">Bluntness</label><input type="range" min="0" max="1" step="0.05" value={params.tipRadius} onChange={e => setParams({...params, tipRadius: parseFloat(e.target.value)})} className="w-full h-2 mt-2 bg-slate-200 rounded-lg appearance-none cursor-pointer"/></div>
                                     </div>
                                 ) : (
-                                    <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl space-y-3 shadow-inner">
-                                        <div><label className="text-[10px] font-bold text-slate-600 uppercase">Curvature</label><input type="range" min="0.2" max="0.8" step="0.01" value={params.edgeCurvature} onChange={e => setParams({...params, edgeCurvature: parseFloat(e.target.value)})} className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer"/></div>
-                                        <div><label className="text-[10px] font-bold text-slate-600 uppercase">Rounding Radius</label><input type="range" min="0" max={toDisplayValue(params.tipWidth/2)} step={0.05} value={toDisplayValue(params.tipRadius)} onChange={(e) => handleSliderChange('tipRadius', e.target.value)} className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer"/></div>
+                                    <div className="p-4 bg-slate-50 border border-slate-100 rounded-2xl space-y-5 shadow-inner">
+                                        <div><label className="text-[10px] font-bold text-slate-600 uppercase">Curvature</label><input type="range" min="0.2" max="0.8" step="0.01" value={params.edgeCurvature} onChange={e => setParams({...params, edgeCurvature: parseFloat(e.target.value)})} className="w-full h-2 mt-2 bg-slate-200 rounded-lg appearance-none cursor-pointer"/></div>
+                                        <div><label className="text-[10px] font-bold text-slate-600 uppercase flex justify-between">Rounding Radius <span>{toDisplayValue(params.tipRadius).toFixed(2)}{unitLabel}</span></label><input type="range" min="0" max={toDisplayValue(params.tipWidth/2)} step={0.05} value={toDisplayValue(params.tipRadius)} onChange={(e) => handleSliderChange('tipRadius', e.target.value)} className="w-full h-2 mt-2 bg-slate-200 rounded-lg appearance-none cursor-pointer"/></div>
                                     </div>
                                 )}
                                 <div className="grid grid-cols-2 gap-3">
-                                    <div><label className="text-xs text-slate-500 mb-1 block font-medium">{params.tipStyle==='leaf'?'Swell Width':'Max Width'}</label><input type="text" value={inputStates.tipWidth} onChange={e => handleTextChange('tipWidth', e.target.value)} className="w-full p-2 border rounded text-xs font-mono outline-none focus:ring-2 focus:ring-blue-500"/></div>
-                                    <div><label className="text-xs text-slate-500 mb-1 block font-medium">Root Width</label><input type="text" value={inputStates.rootWidth} onChange={e => handleTextChange('rootWidth', e.target.value)} className="w-full p-2 border rounded text-xs font-mono outline-none focus:ring-2 focus:ring-blue-500"/></div>
+                                    <div><label className="text-xs text-slate-500 mb-1 block font-medium">Max Width</label><input type="text" inputMode="decimal" value={inputStates.tipWidth} onChange={e => handleTextChange('tipWidth', e.target.value)} className="w-full p-3 border rounded-xl text-base font-mono outline-none bg-slate-50 md:bg-white md:text-xs md:p-2"/></div>
+                                    <div><label className="text-xs text-slate-500 mb-1 block font-medium">Root Width</label><input type="text" inputMode="decimal" value={inputStates.rootWidth} onChange={e => handleTextChange('rootWidth', e.target.value)} className="w-full p-3 border rounded-xl text-base font-mono outline-none bg-slate-50 md:bg-white md:text-xs md:p-2"/></div>
                                 </div>
                             </div>
-                            <div className="pt-4 border-t space-y-2">
+                            <div className="pt-4 border-t space-y-3">
                                 <label className="text-[10px] font-bold uppercase text-slate-400 block tracking-widest mb-2">Production</label>
                                 <div className="grid grid-cols-2 gap-3 mb-4">
-                                    <div><label className="text-xs text-slate-500 mb-1 block font-medium">Tab Len</label><input type="text" value={inputStates.tabLength} onChange={e => handleTextChange('tabLength', e.target.value)} className="w-full p-2 border rounded text-xs font-mono outline-none focus:ring-2 focus:ring-blue-500"/></div>
-                                    <div><label className="text-xs text-slate-500 mb-1 block font-medium">Tab Wid</label><input type="text" value={inputStates.tabWidth} onChange={e => handleTextChange('tabWidth', e.target.value)} className="w-full p-2 border rounded text-xs font-mono outline-none focus:ring-2 focus:ring-blue-500"/></div>
+                                    <div><label className="text-xs text-slate-500 mb-1 block font-medium">Tab Len</label><input type="text" inputMode="decimal" value={inputStates.tabLength} onChange={e => handleTextChange('tabLength', e.target.value)} className="w-full p-3 border rounded-xl text-base font-mono outline-none bg-slate-50 md:bg-white md:text-xs md:p-2"/></div>
+                                    <div><label className="text-xs text-slate-500 mb-1 block font-medium">Tab Wid</label><input type="text" inputMode="decimal" value={inputStates.tabWidth} onChange={e => handleTextChange('tabWidth', e.target.value)} className="w-full p-3 border rounded-xl text-base font-mono outline-none bg-slate-50 md:bg-white md:text-xs md:p-2"/></div>
                                 </div>
-                                <button onClick={downloadSVG} className="w-full bg-blue-600 text-white font-bold py-2 rounded-lg text-sm flex items-center justify-center gap-2 shadow-md hover:bg-blue-700 transition-all"><Icon name="download" size={16}/> Export SVG</button>
-                                <button onClick={downloadJPG} className="w-full bg-slate-100 text-slate-700 font-bold py-2 rounded-lg text-sm flex items-center justify-center gap-2 hover:bg-slate-200 transition-all"><Icon name="image" size={16}/> Export JPG</button>
+                                <div className="flex flex-col gap-2">
+                                    <button onClick={downloadSVG} className="w-full bg-blue-600 text-white font-bold py-3 md:py-2 rounded-xl text-sm flex items-center justify-center gap-2 shadow-md hover:bg-blue-700 transition-all active:scale-95"><Icon name="download" size={16}/> Export SVG</button>
+                                    <button onClick={downloadJPG} className="w-full bg-slate-100 text-slate-700 font-bold py-3 md:py-2 rounded-xl text-sm flex items-center justify-center gap-2 hover:bg-slate-200 transition-all active:scale-95"><Icon name="image" size={16}/> Export JPG</button>
+                                </div>
                             </div>
                         </div>
                     </div>
 
-                    <div className="flex-1 relative flex flex-col min-h-0 bg-white">
-                        <div className="flex-1 flex items-center justify-center p-8 bg-[radial-gradient(#e2e8f0_1.5px,transparent_1.5px)] [background-size:32px_32px]">
-                            <svg className="w-full h-full drop-shadow-2xl" viewBox="-100 -200 800 400">
+                    {/* Main Designer Area */}
+                    <div className="flex-1 relative flex flex-col min-h-0 bg-white z-10">
+                        <div className="flex-1 flex items-center justify-center p-4 md:p-8 bg-[radial-gradient(#e2e8f0_1.5px,transparent_1.5px)] [background-size:32px_32px] overflow-hidden">
+                            <svg className="w-full h-full max-h-[70vh] drop-shadow-2xl" viewBox="-100 -200 800 400" preserveAspectRatio="xMidYMid meet">
                                 <g transform="translate(50, 0)">
                                     <line x1="-100" y1="0" x2="600" y2="0" stroke="#cbd5e1" strokeWidth="1" strokeDasharray="4 4" />
                                     
-                                    {/* The blade path is now drawn first so elements below overlay it */}
                                     <path d={generateBladePath(params)} fill="#fde68a" stroke="#92400e" strokeWidth="2" className="transition-all duration-300" />
                                     
-                                    {/* Sweet Spot Box and Label overlay the blade */}
                                     <rect x={params.exposedLength * 0.35 * IN_TO_PX} y="-120" width={params.exposedLength * 0.07 * IN_TO_PX} height="240" fill="#22c55e" fillOpacity="0.15" />
                                     <text 
                                         x={(params.exposedLength * 0.385) * IN_TO_PX} 
                                         y="-130" 
                                         textAnchor="middle" 
-                                        className="fill-green-600 text-[8px] font-bold uppercase tracking-widest"
+                                        className="fill-green-600 text-[10px] md:text-[8px] font-bold uppercase tracking-widest"
                                     >
                                         Sweet Spot
                                     </text>
 
                                     {params.hasPinHole && <circle cx={-params.pinHoleOffset * IN_TO_PX} cy="0" r={(params.pinHoleSize / 2) * IN_TO_PX} fill="white" stroke="#ef4444" strokeWidth="1.5" />}
+                                    
                                     <g transform={`translate(${derived.cgX * IN_TO_PX}, 0)`} className="transition-all duration-300">
                                         <line x1="-15" y1="0" x2="15" y2="0" stroke="#ef4444" strokeWidth="2" />
                                         <line x1="0" y1="-15" x2="0" y2="15" stroke="#ef4444" strokeWidth="2" />
                                         <circle r="4" fill="#ef4444" fillOpacity="0.2" />
-                                        <text y="30" textAnchor="middle" className="fill-red-600 text-[10px] font-bold uppercase tracking-tight">{derived.cgPercent.toFixed(1)}% Balance</text>
+                                        <text y="30" textAnchor="middle" className="fill-red-600 text-[11px] md:text-[10px] font-bold uppercase tracking-tight">{derived.cgPercent.toFixed(1)}% Balance</text>
                                     </g>
-                                    <g className="fill-blue-500 text-[11px] font-mono pointer-events-none">
+                                    
+                                    <g className="fill-blue-500 text-[12px] md:text-[11px] font-mono pointer-events-none">
                                         <text x={params.exposedLength * IN_TO_PX / 2} y="-20" textAnchor="middle">{toDisplayValue(params.exposedLength).toFixed(unit === 'metric' ? 1 : 2)}{unitLabel}</text>
                                         <path d={`M 0 -10 L ${params.exposedLength * IN_TO_PX} -10`} stroke="#3b82f6" strokeWidth="1" strokeDasharray="2 2" />
                                     </g>
                                 </g>
                             </svg>
                         </div>
-                        <div className="p-4 bg-slate-900 flex justify-between items-center text-white text-[10px] font-bold uppercase tracking-widest shadow-2xl z-20">
-                            <div className="flex gap-6">
+                        
+                        {/* Footer Metrics */}
+                        <div className="p-4 bg-slate-900 flex flex-col gap-3 sm:flex-row sm:justify-between items-center text-white text-[10px] font-bold uppercase tracking-widest shadow-2xl z-20">
+                            <div className="flex flex-wrap justify-center gap-4 sm:gap-6">
                                 <span className="flex items-center gap-1.5"><Icon name="gauge" size={12} className="text-blue-400"/> SENSITIVITY: {derived.sensitivity}</span>
                                 <span className="flex items-center gap-1.5"><Icon name="zap" size={12} className="text-amber-400"/> MOMENTUM: {derived.flywheelRating}</span>
                             </div>
-                            <span className={`px-2 py-0.5 rounded ${derived.cgPercent >= 35 && derived.cgPercent <= 42 ? 'bg-green-600' : 'bg-amber-600'}`}>
+                            <span className={`px-4 py-1 sm:px-2 sm:py-0.5 rounded-full sm:rounded ${derived.cgPercent >= 35 && derived.cgPercent <= 42 ? 'bg-green-600' : 'bg-amber-600'}`}>
                                 {derived.cgPercent >= 35 && derived.cgPercent <= 42 ? 'IDEAL RANGE' : 'OFFSET'}
                             </span>
                         </div>
