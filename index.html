@@ -76,6 +76,22 @@
                 setInputStates(newStates);
             };
 
+            const handleTextChange = (key, rawValue) => {
+                setInputStates(prev => ({ ...prev, [key]: rawValue }));
+                const numericValue = parseFloat(rawValue);
+                if (!isNaN(numericValue)) {
+                    setParams(prev => ({ ...prev, [key]: fromDisplayValue(Math.max(0.001, numericValue)) }));
+                }
+            };
+
+            const handleSliderChange = (key, value) => {
+                const numeric = parseFloat(value);
+                setParams(prev => ({ ...prev, [key]: fromDisplayValue(numeric) }));
+                if (key === 'tipRadius') {
+                    setInputStates(prev => ({ ...prev, [key]: numeric.toString() }));
+                }
+            };
+
             const handleStyleChange = (style) => {
                 const preset = PRESETS[style];
                 setParams(prev => ({ ...prev, ...preset, tipStyle: style }));
@@ -106,7 +122,8 @@
                     let w = hRoot + (hMax - hRoot) * Math.pow(t, curvePower);
                     if (x > L - p.tipRadius) {
                         const tr = Math.max(0.01, p.tipRadius);
-                        w = Math.min(w, hMax * Math.sqrt(Math.max(0, 1 - Math.pow((x - (L - tr)) / tr, 2))));
+                        const ratio = (x - (L - tr)) / tr;
+                        w = Math.min(w, hMax * Math.sqrt(Math.max(0, 1 - Math.pow(ratio, 2))));
                     }
                     return w;
                 }
@@ -153,8 +170,9 @@
                     path += `C ${bX * 0.85} ${-(hTip + k)} ${bX * 0.5} ${-hRoot - k} 0 ${-hRoot - k} `;
                 } else {
                     const cpX = totalX * 0.5;
+                    const curveY = (hRoot + (hTip - hRoot) * 0.5) + (p.edgeCurvature - 0.5) * 100;
                     const r = Math.max(0.001, Math.min(p.tipRadius * scale, totalX * 0.3, hTip));
-                    path += `Q ${cpX} ${(hRoot + (hTip - hRoot) * 0.5) + (p.edgeCurvature - 0.5) * 100} ${totalX - r} ${hTip + k} Q ${totalX} ${hTip + k} ${totalX} 0 Q ${totalX} ${-hTip - k} ${totalX - r} ${-hTip - k} Q ${cpX} ${-((hRoot + (hTip - hRoot) * 0.5) + (p.edgeCurvature - 0.5) * 100)} 0 ${-hRoot - k} `;
+                    path += `Q ${cpX} ${curveY} ${totalX - r} ${hTip + k} Q ${totalX} ${hTip + k} ${totalX} 0 Q ${totalX} ${-hTip - k} ${totalX - r} ${-hTip - k} Q ${cpX} ${-curveY} 0 ${-hRoot - k} `;
                 }
                 return path + `L 0 ${-hRoot - k} L 0 ${-hTab - k} Z`;
             };
@@ -178,41 +196,61 @@
                 const ctx = canvas.getContext('2d');
                 ctx.fillStyle = 'white'; ctx.fillRect(0, 0, canvas.width, canvas.height);
                 ctx.save(); ctx.translate((params.tabLength + 1) * scale, (maxH / 2 + 1) * scale);
+                ctx.strokeStyle = 'black'; ctx.lineWidth = 3;
                 ctx.stroke(new Path2D(generateBladePath(params, true, scale, false)));
                 if (params.hasPinHole) { ctx.beginPath(); ctx.arc(-params.pinHoleOffset * scale, 0, (params.pinHoleSize / 2) * scale, 0, Math.PI * 2); ctx.strokeStyle = 'red'; ctx.stroke(); }
                 ctx.restore();
-                const link = document.createElement('a'); link.href = canvas.toDataURL('image/jpeg'); link.download = 'blade_template.jpg'; link.click();
+                
+                const barY = canvas.height - (0.5 * scale); const barX = 1 * scale;
+                ctx.fillStyle = '#64748b'; ctx.font = `bold ${Math.round(0.12 * scale)}px sans-serif`;
+                ctx.fillText(unit === 'imperial' ? "1 INCH SCALE BAR" : "50MM SCALE BAR", barX, barY - 10);
+                ctx.beginPath(); ctx.moveTo(barX, barY);
+                ctx.lineTo(barX + (unit === 'imperial' ? 1 : 50 / IN_TO_MM) * scale, barY);
+                ctx.strokeStyle = '#64748b'; ctx.lineWidth = 3; ctx.stroke();
+                const link = document.createElement('a'); link.href = canvas.toDataURL('image/jpeg', 0.95); link.download = 'blade_template.jpg'; link.click();
             };
 
             return (
                 <div className="flex flex-col md:flex-row h-screen overflow-hidden text-slate-900 bg-slate-50">
                     <div className={`w-full md:w-80 bg-white border-r flex flex-col shadow-sm transition-all ${isSidebarOpen ? '' : 'md:w-0'}`}>
                         <div className="p-4 border-b flex justify-between items-center bg-white sticky top-0 z-10">
-                            <div className="flex items-center gap-2"><Icon name="wind" className="text-blue-600" size={20}/> <h1 className="font-bold">Blade Designer</h1></div>
-                            <button onClick={toggleUnits} className="text-[10px] font-bold uppercase bg-slate-100 px-2 py-1 rounded">{unit}</button>
+                            <div className="flex items-center gap-2"><Icon name="wind" className="text-blue-600" size={20}/> <h1 className="font-bold text-sm tracking-tight">Blade Designer</h1></div>
+                            <button onClick={toggleUnits} className="text-[10px] font-bold uppercase bg-slate-100 px-2 py-1 rounded hover:bg-slate-200 transition-colors">{unit}</button>
                         </div>
                         <div className="flex-1 overflow-y-auto p-4 space-y-6">
                             <div className="grid grid-cols-2 gap-1 bg-slate-100 p-1 rounded-lg">
-                                <button onClick={() => handleStyleChange('rounded')} className={`py-1.5 text-xs font-bold rounded ${params.tipStyle==='rounded'?'bg-white shadow text-blue-600':'text-slate-500'}`}>Round</button>
-                                <button onClick={() => handleStyleChange('leaf')} className={`py-1.5 text-xs font-bold rounded ${params.tipStyle==='leaf'?'bg-white shadow text-blue-600':'text-slate-500'}`}>Leaf</button>
+                                <button onClick={() => handleStyleChange('rounded')} className={`py-1.5 text-xs font-bold rounded ${params.tipStyle==='rounded'?'bg-white shadow text-blue-600':'text-slate-500 hover:text-slate-700'}`}>Round</button>
+                                <button onClick={() => handleStyleChange('leaf')} className={`py-1.5 text-xs font-bold rounded ${params.tipStyle==='leaf'?'bg-white shadow text-blue-600':'text-slate-500 hover:text-slate-700'}`}>Leaf</button>
                             </div>
                             <div className="space-y-4">
                                 <label className="text-[10px] font-bold uppercase text-slate-400 block tracking-widest">Geometry</label>
-                                <div><label className="text-xs text-slate-500 mb-1 block">Exposed Length</label><input type="text" value={inputStates.exposedLength} onChange={e => setInputStates({...inputStates, exposedLength: e.target.value})} onBlur={() => handleTextChange('exposedLength', inputStates.exposedLength)} className="w-full p-2 border rounded text-sm font-mono"/></div>
+                                <div>
+                                    <label className="text-xs text-slate-500 mb-1 block font-medium">Exposed Length</label>
+                                    <input type="text" value={inputStates.exposedLength} onChange={e => handleTextChange('exposedLength', e.target.value)} className="w-full p-2 border rounded text-sm font-mono outline-none focus:ring-2 focus:ring-blue-500 transition-shadow"/>
+                                </div>
                                 {params.tipStyle === 'leaf' ? (
-                                    <div className="p-3 bg-slate-50 rounded-xl space-y-3">
-                                        <div><label className="text-[10px] font-bold">Swell Position</label><input type="range" min="0.1" max="0.9" step="0.05" value={params.widthPosition} onChange={e => setParams({...params, widthPosition: parseFloat(e.target.value)})} className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none"/></div>
-                                        <div><label className="text-[10px] font-bold">Sharpness</label><input type="range" min="0" max="1" step="0.05" value={params.taperSharpness} onChange={e => setParams({...params, taperSharpness: parseFloat(e.target.value)})} className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none"/></div>
-                                        <div><label className="text-[10px] font-bold">Bluntness</label><input type="range" min="0" max="1" step="0.05" value={params.tipRadius} onChange={e => setParams({...params, tipRadius: parseFloat(e.target.value)})} className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none"/></div>
+                                    <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl space-y-3 shadow-inner">
+                                        <div><label className="text-[10px] font-bold text-slate-600 uppercase">Swell Position</label><input type="range" min="0.1" max="0.9" step="0.05" value={params.widthPosition} onChange={e => setParams({...params, widthPosition: parseFloat(e.target.value)})} className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer"/></div>
+                                        <div><label className="text-[10px] font-bold text-slate-600 uppercase">Sharpness</label><input type="range" min="0" max="1" step="0.05" value={params.taperSharpness} onChange={e => setParams({...params, taperSharpness: parseFloat(e.target.value)})} className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer"/></div>
+                                        <div><label className="text-[10px] font-bold text-slate-600 uppercase">Bluntness</label><input type="range" min="0" max="1" step="0.05" value={params.tipRadius} onChange={e => setParams({...params, tipRadius: parseFloat(e.target.value)})} className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer"/></div>
                                     </div>
                                 ) : (
-                                    <div className="p-3 bg-slate-50 rounded-xl space-y-3">
-                                        <div><label className="text-[10px] font-bold">Curvature</label><input type="range" min="0.2" max="0.8" step="0.01" value={params.edgeCurvature} onChange={e => setParams({...params, edgeCurvature: parseFloat(e.target.value)})} className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none"/></div>
-                                        <div><label className="text-[10px] font-bold">Rounding Radius</label><input type="range" min="0" max={toDisplayValue(params.tipWidth/2)} step="0.05" value={toDisplayValue(params.tipRadius)} onChange={e => handleSliderChange('tipRadius', e.target.value)} className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none"/></div>
+                                    <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl space-y-3 shadow-inner">
+                                        <div><label className="text-[10px] font-bold text-slate-600 uppercase">Curvature</label><input type="range" min="0.2" max="0.8" step="0.01" value={params.edgeCurvature} onChange={e => setParams({...params, edgeCurvature: parseFloat(e.target.value)})} className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer"/></div>
+                                        <div><label className="text-[10px] font-bold text-slate-600 uppercase">Rounding Radius</label><input type="range" min="0" max={toDisplayValue(params.tipWidth/2)} step={0.05} value={toDisplayValue(params.tipRadius)} onChange={(e) => handleSliderChange('tipRadius', e.target.value)} className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer"/></div>
                                     </div>
                                 )}
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div><label className="text-xs text-slate-500 mb-1 block font-medium">{params.tipStyle==='leaf'?'End Width':'Max Width'}</label><input type="text" value={inputStates.tipWidth} onChange={e => handleTextChange('tipWidth', e.target.value)} className="w-full p-2 border rounded text-xs font-mono outline-none focus:ring-2 focus:ring-blue-500"/></div>
+                                    <div><label className="text-xs text-slate-500 mb-1 block font-medium">Root Width</label><input type="text" value={inputStates.rootWidth} onChange={e => handleTextChange('rootWidth', e.target.value)} className="w-full p-2 border rounded text-xs font-mono outline-none focus:ring-2 focus:ring-blue-500"/></div>
+                                </div>
                             </div>
                             <div className="pt-4 border-t space-y-2">
+                                <label className="text-[10px] font-bold uppercase text-slate-400 block tracking-widest mb-2">Production</label>
+                                <div className="grid grid-cols-2 gap-3 mb-4">
+                                    <div><label className="text-xs text-slate-500 mb-1 block font-medium">Tab Len</label><input type="text" value={inputStates.tabLength} onChange={e => handleTextChange('tabLength', e.target.value)} className="w-full p-2 border rounded text-xs font-mono outline-none focus:ring-2 focus:ring-blue-500"/></div>
+                                    <div><label className="text-xs text-slate-500 mb-1 block font-medium">Tab Wid</label><input type="text" value={inputStates.tabWidth} onChange={e => handleTextChange('tabWidth', e.target.value)} className="w-full p-2 border rounded text-xs font-mono outline-none focus:ring-2 focus:ring-blue-500"/></div>
+                                </div>
                                 <button onClick={downloadSVG} className="w-full bg-blue-600 text-white font-bold py-2 rounded-lg text-sm flex items-center justify-center gap-2 shadow-md hover:bg-blue-700 transition-all"><Icon name="download" size={16}/> Export SVG</button>
                                 <button onClick={downloadJPG} className="w-full bg-slate-100 text-slate-700 font-bold py-2 rounded-lg text-sm flex items-center justify-center gap-2 hover:bg-slate-200 transition-all"><Icon name="image" size={16}/> Export JPG</button>
                             </div>
@@ -225,20 +263,36 @@
                                 <g transform="translate(50, 0)">
                                     <line x1="-100" y1="0" x2="600" y2="0" stroke="#cbd5e1" strokeWidth="1" strokeDasharray="4 4" />
                                     <rect x={params.exposedLength * 0.35 * IN_TO_PX} y="-120" width={params.exposedLength * 0.07 * IN_TO_PX} height="240" fill="#22c55e" fillOpacity="0.1" />
-                                    <path d={generateBladePath(params)} fill="#fde68a" stroke="#92400e" strokeWidth="2" />
-                                    <g transform={`translate(${derived.cgX * IN_TO_PX}, 0)`}>
+                                    
+                                    {/* Restoration of the Sweet Spot text label */}
+                                    <text 
+                                        x={(params.exposedLength * 0.385) * IN_TO_PX} 
+                                        y="-130" 
+                                        textAnchor="middle" 
+                                        className="fill-green-600 text-[8px] font-bold uppercase tracking-widest"
+                                    >
+                                        Sweet Spot
+                                    </text>
+
+                                    <path d={generateBladePath(params)} fill="#fde68a" stroke="#92400e" strokeWidth="2" className="transition-all duration-300" />
+                                    {params.hasPinHole && <circle cx={-params.pinHoleOffset * IN_TO_PX} cy="0" r={(params.pinHoleSize / 2) * IN_TO_PX} fill="white" stroke="#ef4444" strokeWidth="1.5" />}
+                                    <g transform={`translate(${derived.cgX * IN_TO_PX}, 0)`} className="transition-all duration-300">
                                         <line x1="-15" y1="0" x2="15" y2="0" stroke="#ef4444" strokeWidth="2" />
                                         <line x1="0" y1="-15" x2="0" y2="15" stroke="#ef4444" strokeWidth="2" />
                                         <circle r="4" fill="#ef4444" fillOpacity="0.2" />
-                                        <text y="30" textAnchor="middle" className="fill-red-600 text-[10px] font-bold">{derived.cgPercent.toFixed(1)}% Balance</text>
+                                        <text y="30" textAnchor="middle" className="fill-red-600 text-[10px] font-bold uppercase tracking-tight">{derived.cgPercent.toFixed(1)}% Balance</text>
+                                    </g>
+                                    <g className="fill-blue-500 text-[11px] font-mono pointer-events-none">
+                                        <text x={params.exposedLength * IN_TO_PX / 2} y="-20" textAnchor="middle">{toDisplayValue(params.exposedLength).toFixed(unit === 'metric' ? 1 : 2)}{unitLabel}</text>
+                                        <path d={`M 0 -10 L ${params.exposedLength * IN_TO_PX} -10`} stroke="#3b82f6" strokeWidth="1" strokeDasharray="2 2" />
                                     </g>
                                 </g>
                             </svg>
                         </div>
-                        <div className="p-4 bg-slate-900 flex justify-between items-center text-white text-[10px] font-bold uppercase tracking-widest shadow-2xl">
+                        <div className="p-4 bg-slate-900 flex justify-between items-center text-white text-[10px] font-bold uppercase tracking-widest shadow-2xl z-20">
                             <div className="flex gap-6">
                                 <span className="flex items-center gap-1.5"><Icon name="gauge" size={12} className="text-blue-400"/> SENSITIVITY: {derived.sensitivity}</span>
-                                <span className="flex items-center gap-1.5"><Icon name="zap" size={12} className="text-amber-400"/> FLYER: {derived.flywheelRating}</span>
+                                <span className="flex items-center gap-1.5"><Icon name="zap" size={12} className="text-amber-400"/> MOMENTUM: {derived.flywheelRating}</span>
                             </div>
                             <span className={`px-2 py-0.5 rounded ${derived.cgPercent >= 35 && derived.cgPercent <= 42 ? 'bg-green-600' : 'bg-amber-600'}`}>
                                 {derived.cgPercent >= 35 && derived.cgPercent <= 42 ? 'IDEAL RANGE' : 'OFFSET'}
